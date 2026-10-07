@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server/dist/index.js",
+    "build:server": "cd .. && npm run build:server"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

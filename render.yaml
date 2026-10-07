@@ -3,8 +3,9 @@ services:
     name: regulamap-backend
     runtime: node
     plan: free
+    rootDir: .
     buildCommand: npm install && npm run build:server
-    startCommand: npm run start
+    startCommand: node server/dist/index.js
     healthCheckPath: /health
     autoDeploy: true
     envVars:

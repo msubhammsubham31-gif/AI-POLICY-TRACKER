@@ -11,7 +11,13 @@ node_modules/
 *.env.local
 
 # Production build outputs
-dist/
+client/dist/
+server/dist/
+dist/*
+!dist/index.js
+client/server/dist/*
+!client/server/dist/index.js
+!client/server/dist/package.json
 build/
 out/
 
