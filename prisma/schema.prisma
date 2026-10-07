@@ -1,0 +1,522 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  COMPLIANCE_MANAGER
+  LEGAL_REVIEWER
+  ANALYST
+  VIEWER
+}
+
+enum RegulationCategory {
+  EMISSIONS
+  CARBON
+  CLIMATE
+  CHEMICALS
+  WASTE
+  PACKAGING
+  WATER
+  ENERGY
+  AIR_QUALITY
+  HAZARDOUS_MATERIALS
+  PRODUCT_STEWARDSHIP
+  RECYCLING
+  DEFORESTATION
+  BIODIVERSITY
+  ESG_DISCLOSURE
+  SUPPLY_CHAIN
+  SUSTAINABILITY
+}
+
+enum RegulationStatus {
+  PROPOSED
+  UNDER_REVIEW
+  ENACTED
+  AMENDED
+  REPEALED
+}
+
+enum ChangeType {
+  NEW_REGULATION
+  AMENDMENT
+  THRESHOLD_CHANGE
+  DEADLINE_CHANGE
+  DEFINITION_CHANGE
+  SCOPE_CHANGE
+  REPORTING_CHANGE
+  PENALTY_CHANGE
+  OBLIGATION_CHANGE
+  EXEMPTION_CHANGE
+  OTHER
+}
+
+enum RiskLevel {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFORMATIONAL
+}
+
+enum ActionStatus {
+  OPEN
+  IN_PROGRESS
+  BLOCKED
+  UNDER_REVIEW
+  COMPLETED
+  WAIVED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  MODIFIED
+}
+
+enum SourceType {
+  OFFICIAL_API
+  OFFICIAL_WEBSITE
+  RSS
+  ATOM
+  DOCUMENT_FEED
+  MANUAL_UPLOAD
+}
+
+model Organization {
+  id                      String                   @id @default(uuid())
+  name                    String
+  industry                String
+  countries               String[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  users                   User[]
+  members                 OrganizationMember[]
+  facilities              Facility[]
+  products                Product[]
+  suppliers               Supplier[]
+  complianceActions       ComplianceAction[]
+  documents               Document[]
+  auditLogs               AuditLog[]
+  notificationPreferences NotificationPreference[]
+}
+
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  passwordHash        String
+  fullName            String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  organizationId      String
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships         OrganizationMember[]
+  assignedActions     ComplianceAction[]   @relation("ActionOwner")
+  reviewedAnalyses    AIAnalysis[]         @relation("AnalysisReviewer")
+  auditLogs           AuditLog[]
+}
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  role           Role         @default(ANALYST)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Jurisdiction {
+  id                String             @id @default(uuid())
+  code              String             @unique // e.g. "EU", "US-CA", "DE"
+  name              String
+  country           String
+  region            String
+  latitude          Float
+  longitude         Float
+  regulatorySources RegulatorySource[]
+  regulations       Regulation[]
+}
+
+model RegulatorySource {
+  id             String       @id @default(uuid())
+  name           String
+  sourceType     SourceType
+  url            String
+  jurisdictionId String
+  jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  lastPolledAt   DateTime?
+  createdAt      DateTime     @default(now())
+  regulations    Regulation[]
+}
+
+model Regulation {
+  id                  String               @id @default(uuid())
+  title               String
+  shortTitle          String
+  jurisdictionId      String
+  jurisdiction        Jurisdiction         @relation(fields: [jurisdictionId], references: [id])
+  regulatorySourceId  String?
+  regulatorySource    RegulatorySource?    @relation(fields: [regulatorySourceId], references: [id])
+  country             String
+  regulatoryBody      String
+  category            RegulationCategory
+  description         String               @db.Text
+  sourceUrl           String
+  publicationDate     DateTime
+  effectiveDate       DateTime
+  status              RegulationStatus
+  currentVersion      Int                  @default(1)
+  applicability       String               @db.Text
+  industry            String
+  penalties           String               @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  versions            RegulationVersion[]
+  changes             RegulatoryChange[]
+  impacts             RegulationImpact[]
+  actions             ComplianceAction[]
+  documents           Document[]
+}
+
+model RegulationVersion {
+  id                 String             @id @default(uuid())
+  regulationId       String
+  regulation         Regulation         @relation(fields: [regulationId], references: [id], onDelete: Cascade)
+  versionNumber      Int
+  sourceDocumentHash String
+  sourceUrl          String
+  rawDocument        String             @db.Text
+  normalizedText     String             @db.Text
+  publicationDate    DateTime
+  effectiveDate      DateTime
+  retrievedAt        DateTime           @default(now())
+  previousVersions   RegulatoryChange[] @relation("PreviousVersion")
+  newVersions        RegulatoryChange[] @relation("NewVersion")
+
+  @@unique([regulationId, versionNumber])
+}
+
+model RegulatoryChange {
+  id                 String                   @id @default(uuid())
+  regulationId       String
+  regulation         Regulation               @relation(fields: [regulationId], references: [id], onDelete: Cascade)
+  previousVersionId  String?
+  previousVersion    RegulationVersion?       @relation("PreviousVersion", fields: [previousVersionId], references: [id])
+  newVersionId       String
+  newVersion         RegulationVersion        @relation("NewVersion", fields: [newVersionId], references: [id])
+  changeType         ChangeType
+  summary            String                   @db.Text
+  changedSections    Json                     // Array of diff blocks
+  severity           RiskLevel
+  detectedAt         DateTime                 @default(now())
+  effectiveDate      DateTime
+  reviewStatus       ReviewStatus             @default(PENDING)
+  sections           RegulatoryChangeSection[]
+  aiAnalyses         AIAnalysis[]
+  impacts            RegulationImpact[]
+}
+
+model RegulatoryChangeSection {
+  id                 String           @id @default(uuid())
+  regulatoryChangeId String
+  regulatoryChange   RegulatoryChange @relation(fields: [regulatoryChangeId], references: [id], onDelete: Cascade)
+  sectionIdentifier  String           // e.g., "Article 4, Para 2"
+  oldText            String           @db.Text
+  newText            String           @db.Text
+  changeType         ChangeType
+}
+
+model Facility {
+  id                 String              @id @default(uuid())
+  organizationId     String
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name               String
+  country            String
+  location           String
+  latitude           Float
+  longitude          Float
+  facilityType       String
+  productionCapacity String
+  emissionsData      Json                // CO2, Scope 1/2/3
+  waterUsage         Json
+  energyMetrics      Json
+  wasteOutput        Json
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  processes          FacilityProcess[]
+  productMappings    ProductFacility[]
+  impacts            RegulationImpact[]
+  actions            ComplianceAction[]
+  documents          Document[]
+  supplierMappings   SupplierFacility[]
+}
+
+model Product {
+  id             String              @id @default(uuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  sku            String              @unique
+  category       String
+  markets        String[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  materials      ProductMaterial[]
+  facilities     ProductFacility[]
+  suppliers      SupplierProduct[]
+  impacts        RegulationImpact[]
+  actions        ComplianceAction[]
+  documents      Document[]
+}
+
+model ProductMaterial {
+  id               String   @id @default(uuid())
+  productId        String
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  materialName     String
+  casNumber        String?
+  percentageWeight Float
+  supplierId       String?
+  supplier         Supplier? @relation(fields: [supplierId], references: [id])
+}
+
+model Process {
+  id          String            @id @default(uuid())
+  name        String
+  description String            @db.Text
+  inputs      String[]
+  chemicals   String[]
+  emissions   String[]
+  waste       String[]
+  energyKw    Float
+  facilities  FacilityProcess[]
+  impacts     RegulationImpact[]
+  actions     ComplianceAction[]
+}
+
+model FacilityProcess {
+  id         String   @id @default(uuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  processId  String
+  process    Process  @relation(fields: [processId], references: [id], onDelete: Cascade)
+
+  @@unique([facilityId, processId])
+}
+
+model ProductFacility {
+  id         String   @id @default(uuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, facilityId])
+}
+
+model Supplier {
+  id               String             @id @default(uuid())
+  organizationId   String
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name             String
+  country          String
+  certifications   String[]
+  complianceStatus String
+  riskScore        Float
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  products         SupplierProduct[]
+  facilities       SupplierFacility[]
+  materials        ProductMaterial[]
+  impacts          RegulationImpact[]
+  actions          ComplianceAction[]
+  documents        Document[]
+}
+
+model SupplierProduct {
+  id         String   @id @default(uuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, productId])
+}
+
+model SupplierFacility {
+  id         String   @id @default(uuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, facilityId])
+}
+
+model RegulationImpact {
+  id                    String            @id @default(uuid())
+  regulationId          String
+  regulation            Regulation        @relation(fields: [regulationId], references: [id], onDelete: Cascade)
+  regulatoryChangeId    String?
+  regulatoryChange      RegulatoryChange? @relation(fields: [regulatoryChangeId], references: [id])
+  facilityId            String?
+  facility              Facility?         @relation(fields: [facilityId], references: [id])
+  productId             String?
+  product               Product?          @relation(fields: [productId], references: [id])
+  processId             String?
+  process               Process?          @relation(fields: [processId], references: [id])
+  supplierId            String?
+  supplier              Supplier?         @relation(fields: [supplierId], references: [id])
+  impactLevel           RiskLevel
+  reason                String            @db.Text
+  regulatoryRequirement String            @db.Text
+  evidence              String            @db.Text
+  confidence            Float
+  recommendedAction     String            @db.Text
+  createdAt             DateTime          @default(now())
+}
+
+model AIAnalysis {
+  id                   String           @id @default(uuid())
+  regulatoryChangeId   String
+  regulatoryChange     RegulatoryChange @relation(fields: [regulatoryChangeId], references: [id], onDelete: Cascade)
+  summary              String           @db.Text
+  whatChanged          Json             // String array
+  whyItMatters         String           @db.Text
+  affectedProducts     Json
+  affectedFacilities   Json
+  affectedProcesses    Json
+  affectedSuppliers    Json
+  potentialObligations Json
+  recommendedActions   Json
+  effectiveDate        DateTime
+  urgency              RiskLevel
+  riskLevel            RiskLevel
+  confidence           Float
+  requiresHumanReview  Boolean          @default(true)
+  sourceReferences     Json
+  reviewStatus         ReviewStatus     @default(PENDING)
+  reviewerId           String?
+  reviewer             User?            @relation("AnalysisReviewer", fields: [reviewerId], references: [id])
+  reviewNotes          String?          @db.Text
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+}
+
+model ComplianceAction {
+  id               String        @id @default(uuid())
+  organizationId   String
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title            String
+  description      String        @db.Text
+  regulationId     String?
+  regulation       Regulation?   @relation(fields: [regulationId], references: [id])
+  facilityId       String?
+  facility         Facility?     @relation(fields: [facilityId], references: [id])
+  productId        String?
+  product          Product?      @relation(fields: [productId], references: [id])
+  processId        String?
+  process          Process?      @relation(fields: [processId], references: [id])
+  supplierId       String?
+  supplier         Supplier?     @relation(fields: [supplierId], references: [id])
+  ownerId          String?
+  owner            User?         @relation("ActionOwner", fields: [ownerId], references: [id])
+  priority         RiskLevel
+  status           ActionStatus  @default(OPEN)
+  dueDate          DateTime
+  evidenceRequired String        @db.Text
+  completionNotes  String?       @db.Text
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deadlines        Deadline[]
+  documents        Document[]
+}
+
+model Deadline {
+  id                 String            @id @default(uuid())
+  complianceActionId String?
+  complianceAction   ComplianceAction? @relation(fields: [complianceActionId], references: [id], onDelete: Cascade)
+  title              String
+  dueDate            DateTime
+  category           RegulationCategory
+  isMilestone        Boolean           @default(false)
+  createdAt          DateTime          @default(now())
+  alerts             Alert[]
+}
+
+model Alert {
+  id             String       @id @default(uuid())
+  organizationId String
+  title          String
+  message        String       @db.Text
+  severity       RiskLevel
+  read           Boolean      @default(false)
+  deadlineId     String?
+  deadline       Deadline?    @relation(fields: [deadlineId], references: [id])
+  createdAt      DateTime     @default(now())
+}
+
+model Document {
+  id                 String            @id @default(uuid())
+  organizationId     String
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title              String
+  fileType           String
+  fileUrl            String
+  fileSize           Int
+  regulationId       String?
+  regulation         Regulation?       @relation(fields: [regulationId], references: [id])
+  facilityId         String?
+  facility           Facility?         @relation(fields: [facilityId], references: [id])
+  productId          String?
+  product            Product?          @relation(fields: [productId], references: [id])
+  supplierId         String?
+  supplier           Supplier?         @relation(fields: [supplierId], references: [id])
+  complianceActionId String?
+  complianceAction   ComplianceAction? @relation(fields: [complianceActionId], references: [id])
+  createdAt          DateTime          @default(now())
+  versions           DocumentVersion[]
+}
+
+model DocumentVersion {
+  id            String   @id @default(uuid())
+  documentId    String
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  fileUrl       String
+  uploadedAt    DateTime @default(now())
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id])
+  action         String       // e.g. "REGULATION_CREATED", "ACTION_COMPLETED"
+  entityType     String
+  entityId       String
+  metadata       Json
+  ipAddress      String?
+  createdAt      DateTime     @default(now())
+}
+
+model NotificationPreference {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel        String       // EMAIL, IN_APP
+  frequency      String       // IMMEDIATE, DAILY_DIGEST, WEEKLY_DIGEST
+  criticalOnly   Boolean      @default(false)
+}

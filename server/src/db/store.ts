@@ -1,0 +1,1076 @@
+import { seedData } from './seedData';
+import { computeSHA256, computeTextDiff } from '../services/diffEngine';
+
+// We import regulations and changes data directly
+const rawRegulations = [
+  {
+    id: 'reg-001',
+    title: 'EU Corporate Sustainability Reporting Directive (CSRD) & ESRS Standards',
+    shortTitle: 'EU CSRD Directive 2022/2464',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Commission / EFRAG',
+    category: 'ESG_DISCLOSURE',
+    description: 'Mandatory double-materiality sustainability reporting covering Scope 1, 2, and upstream/downstream Scope 3 emissions, circular economy metrics, and biodiversity impacts under strict digital tagging rules.',
+    sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32022L2464',
+    publicationDate: '2023-01-05T00:00:00Z',
+    effectiveDate: '2025-01-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 3,
+    applicability: 'All large EU entities (>250 employees or >€50M turnover) and non-EU companies with >€150M EU revenue.',
+    industry: 'Cross-industry, Manufacturing, Specialty Chemicals',
+    penalties: 'Up to 5% of global group annual turnover, administrative sanctions, and disqualification from public tenders.'
+  },
+  {
+    id: 'reg-002',
+    title: 'EU REACH Regulation Annex XVII — Universal PFAS Restriction Proposal',
+    shortTitle: 'EU REACH PFAS Universal Ban',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Chemicals Agency (ECHA)',
+    category: 'CHEMICALS',
+    description: 'Comprehensive restriction proposal prohibiting the manufacture, placing on the market, and use of per- and polyfluoroalkyl substances (PFAS) containing at least one fully fluorinated methyl or methylene carbon atom.',
+    sourceUrl: 'https://echa.europa.eu/hot-topics/perfluoroalkyl-chemicals-pfas',
+    publicationDate: '2023-02-07T00:00:00Z',
+    effectiveDate: '2026-06-30T00:00:00Z',
+    status: 'UNDER_REVIEW',
+    currentVersion: 4,
+    applicability: 'Chemical manufacturers, industrial coatings, batteries, lubricants, and packaging producers exporting to or operating in the EEA.',
+    industry: 'Specialty Chemicals, Industrial Coatings, Electronics',
+    penalties: 'Immediate market ban, confiscation of goods, and civil penalties exceeding €10M per member state authority.'
+  },
+  {
+    id: 'reg-003',
+    title: 'EU Carbon Border Adjustment Mechanism (CBAM) Regulation (EU) 2023/956',
+    shortTitle: 'EU CBAM Regulation',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Commission DG TAXUD',
+    category: 'CARBON',
+    description: 'Carbon pricing equalization mechanism taxing embedded GHG emissions of imported goods including steel, aluminum, fertilizers, hydrogen, and chemical precursors entering the EU internal market.',
+    sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32023R0956',
+    publicationDate: '2023-05-16T00:00:00Z',
+    effectiveDate: '2026-01-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'Importers and producers of energy-intensive materials into the EU customs territory.',
+    industry: 'Metals, Chemicals, Fertilizers, Polymers',
+    penalties: '€10 to €50 per tonne of unreported embedded CO2 emissions; revocation of authorized CBAM declarant status.'
+  },
+  {
+    id: 'reg-004',
+    title: 'EU Packaging and Packaging Waste Regulation (PPWR) 2024 Revision',
+    shortTitle: 'EU PPWR 2024',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Parliament & Council',
+    category: 'PACKAGING',
+    description: 'Mandatory design-for-recycling grades, minimum post-consumer recycled plastic percentages (35% by 2030, 65% by 2040), ban on PFAS in food contact packaging, and strict empty space ratio caps (maximum 50%).',
+    sourceUrl: 'https://environment.ec.europa.eu/topics/waste-and-recycling/packaging-waste_en',
+    publicationDate: '2024-04-24T00:00:00Z',
+    effectiveDate: '2025-11-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'All packaging manufacturers, distributors, e-commerce sellers, and food/beverage processors in the EU.',
+    industry: 'Packaging, Polymers, Consumer Goods',
+    penalties: 'Fines proportional to non-compliant packaging volumes, commercial sales prohibition across all 27 EU member states.'
+  },
+  {
+    id: 'reg-005',
+    title: 'EU Deforestation Regulation (EUDR) Regulation (EU) 2023/1115',
+    shortTitle: 'EUDR Deforestation Due Diligence',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Commission DG ENV',
+    category: 'DEFORESTATION',
+    description: 'Mandatory geolocation tracking (polygon coordinates) proving commodities (cattle, cocoa, coffee, oil palm, rubber, soya, wood and paper derivatives) did not originate on land deforested after Dec 31, 2020.',
+    sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32023R1115',
+    publicationDate: '2023-06-09T00:00:00Z',
+    effectiveDate: '2025-12-30T00:00:00Z',
+    status: 'AMENDED',
+    currentVersion: 3,
+    applicability: 'Traders and operators placing covered commodities and derived materials on the EU market.',
+    industry: 'Forestry, Paper, Bio-Polymers, Agriculture',
+    penalties: 'Confiscation of shipments, exclusion from public procurement for 12 months, fines up to 4% of total EU turnover.'
+  },
+  {
+    id: 'reg-006',
+    title: 'EU Batteries and Waste Batteries Regulation (EU) 2023/1542',
+    shortTitle: 'EU Battery Passport Regulation',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Commission DG GROW',
+    category: 'PRODUCT_STEWARDSHIP',
+    description: 'Comprehensive lifecycle requirements for all industrial and EV batteries including mandatory Digital Battery Passports, recycled cobalt (16%), lead (85%), lithium (6%), and nickel (6%) quotas, and carbon footprint declarations.',
+    sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32023R1542',
+    publicationDate: '2023-07-28T00:00:00Z',
+    effectiveDate: '2025-08-18T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'Battery cell manufacturers, battery module integrators, EV producers, and industrial energy storage operators.',
+    industry: 'Energy Storage, Automotive, Electronics',
+    penalties: 'CE mark revocation, mandatory product recall at manufacturer expense, administrative fines up to €20M.'
+  },
+  {
+    id: 'reg-007',
+    title: 'US EPA TSCA Section 8(a)(7) PFAS Reporting & Recordkeeping Rule',
+    shortTitle: 'US EPA TSCA PFAS Rule 40 CFR 705',
+    jurisdictionId: 'jur-us',
+    country: 'United States',
+    regulatoryBody: 'US Environmental Protection Agency (EPA)',
+    category: 'CHEMICALS',
+    description: 'One-time retrospective reporting requirement under the Toxic Substances Control Act mandating every entity that manufactured or imported PFAS or PFAS-containing articles since January 1, 2011 to report chemical identity, volumes, uses, exposures, and environmental disposals.',
+    sourceUrl: 'https://www.epa.gov/assessing-and-managing-chemicals-under-tsca/tsca-section-8a7-reporting-and-recordkeeping-requirements',
+    publicationDate: '2023-10-11T00:00:00Z',
+    effectiveDate: '2025-05-08T00:00:00Z',
+    status: 'AMENDED',
+    currentVersion: 3,
+    applicability: 'All US chemical manufacturers and importers of industrial articles containing PFAS trace compounds.',
+    industry: 'Chemicals, Electronics, Automotive, Manufacturing',
+    penalties: 'Civil penalties under TSCA Section 16 up to $46,989 per day per violation.'
+  },
+  {
+    id: 'reg-008',
+    title: 'California Senate Bill 253 — Climate Corporate Data Accountability Act',
+    shortTitle: 'California SB 253 Climate Disclosure',
+    jurisdictionId: 'jur-us-ca',
+    country: 'United States (California)',
+    regulatoryBody: 'California Air Resources Board (CARB)',
+    category: 'CLIMATE',
+    description: 'Requires all public and private US enterprises with annual revenues exceeding $1 billion that do business in California to publicly disclose audited Scope 1, Scope 2, and Scope 3 greenhouse gas emissions annually.',
+    sourceUrl: 'https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240SB253',
+    publicationDate: '2023-10-07T00:00:00Z',
+    effectiveDate: '2026-01-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'Enterprises doing business in California with total annual global revenues >$1,000,000,000.',
+    industry: 'All enterprise sectors, Heavy Industry, Consumer Goods',
+    penalties: 'CARB administrative penalties up to $500,000 per reporting year.'
+  },
+  {
+    id: 'reg-009',
+    title: 'California Senate Bill 261 — Climate-Related Financial Risk Disclosures',
+    shortTitle: 'California SB 261 Climate Risk',
+    jurisdictionId: 'jur-us-ca',
+    country: 'United States (California)',
+    regulatoryBody: 'California Air Resources Board (CARB)',
+    category: 'CLIMATE',
+    description: 'Mandates biennial publication of climate-related financial risk reports aligning with the Task Force on Climate-Related Financial Disclosures (TCFD) framework.',
+    sourceUrl: 'https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240SB261',
+    publicationDate: '2023-10-07T00:00:00Z',
+    effectiveDate: '2026-01-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 1,
+    applicability: 'Enterprises doing business in California with annual global revenues >$500,000,000.',
+    industry: 'Financial, Industrial, Manufacturing',
+    penalties: 'Fines up to $50,000 per reporting cycle.'
+  },
+  {
+    id: 'reg-010',
+    title: 'German Supply Chain Due Diligence Act (Lieferkettensorgfaltspflichtengesetz — LkSG)',
+    shortTitle: 'Germany LkSG Supply Chain Act',
+    jurisdictionId: 'jur-de',
+    country: 'Germany',
+    regulatoryBody: 'BAFA (Federal Office for Economic Affairs and Export Control)',
+    category: 'SUPPLY_CHAIN',
+    description: 'Mandates establishment of risk management systems to prevent human rights abuses and environmental degradation throughout global supplier tiers.',
+    sourceUrl: 'https://www.bafa.de/EN/Supply_Chain_Act/supply_chain_act_node.html',
+    publicationDate: '2023-01-01T00:00:00Z',
+    effectiveDate: '2024-01-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'German companies and international companies with German branches with >=1,000 employees.',
+    industry: 'Manufacturing, Automotive, Specialty Chemicals',
+    penalties: 'Up to 2% of average annual global turnover for companies >€400M turnover.'
+  },
+  {
+    id: 'reg-011',
+    title: 'US Clean Air Act Section 112 Synthetic Organic Chemical HAP NESHAP Standards',
+    shortTitle: 'US EPA HON NESHAP Clean Air Rule',
+    jurisdictionId: 'jur-us',
+    country: 'United States',
+    regulatoryBody: 'US Environmental Protection Agency (EPA)',
+    category: 'AIR_QUALITY',
+    description: 'Revised National Emission Standards for Hazardous Air Pollutants capping fenceline concentrations of chloroprene, ethylene oxide, benzene, and 1,3-butadiene at chemical synthesis plants.',
+    sourceUrl: 'https://www.epa.gov/stationary-sources-air-pollution/hazardous-organic-neshap-synthetic-organic-chemical-manufacturing',
+    publicationDate: '2024-04-09T00:00:00Z',
+    effectiveDate: '2026-04-09T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'SOCMI facilities, petrochemical refineries, synthetic resin and coating manufacturing facilities.',
+    industry: 'Petrochemical, Synthetic Resins, Fine Chemicals',
+    penalties: 'Clean Air Act civil judicial enforcement up to $109,000 per violation day.'
+  },
+  {
+    id: 'reg-012',
+    title: 'Basel Convention Plastic Waste Control Amendments on Mixed & Halogenated Polymers',
+    shortTitle: 'Basel Convention Plastic Waste Control',
+    jurisdictionId: 'jur-intl',
+    country: 'International',
+    regulatoryBody: 'UN Environment Programme (UNEP)',
+    category: 'WASTE',
+    description: 'Legally binding international treaty governing transboundary movement of non-hazardous and hazardous plastic waste, requiring Prior Informed Consent (PIC).',
+    sourceUrl: 'http://www.basel.int/Implementation/Plasticwaste/overview/tabid/8340/Default.aspx',
+    publicationDate: '2021-01-01T00:00:00Z',
+    effectiveDate: '2024-03-01T00:00:00Z',
+    status: 'AMENDED',
+    currentVersion: 3,
+    applicability: 'International recyclers, waste management contractors, and global material exporters.',
+    industry: 'Waste Management, Plastics, Recycling',
+    penalties: 'Interception and repatriation of illegal waste shipments at exporter expense.'
+  },
+  {
+    id: 'reg-013',
+    title: 'EU Industrial Emissions Directive (IED 2.0) Directive (EU) 2024/1785',
+    shortTitle: 'EU IED 2.0 Revision',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Commission DG ENV',
+    category: 'EMISSIONS',
+    description: 'Expanded industrial permitting directive covering gigafactories, battery manufacturing plants, chemical synthesis installations, and mineral extraction with binding Best Available Techniques (BAT) emission limits.',
+    sourceUrl: 'https://eur-lex.europa.eu/eli/dir/2024/1785/oj',
+    publicationDate: '2024-07-15T00:00:00Z',
+    effectiveDate: '2026-08-04T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 1,
+    applicability: 'Operating industrial chemical installations, battery gigafactories, and metal treatment plants in the EU.',
+    industry: 'Heavy Industry, Batteries, Chemicals',
+    penalties: 'Permit revocation, compensation claims, fines of at least 3% of the operator’s annual EU turnover.'
+  },
+  {
+    id: 'reg-014',
+    title: 'UK Extended Producer Responsibility (EPR) for Packaging Regulations 2024',
+    shortTitle: 'UK Packaging EPR Scheme',
+    jurisdictionId: 'jur-uk',
+    country: 'United Kingdom',
+    regulatoryBody: 'UK DEFRA / Environment Agency',
+    category: 'PACKAGING',
+    description: 'Mandatory modulated waste management fees placed on brand owners and importers based on packaging recyclability, weight, and material composition.',
+    sourceUrl: 'https://www.gov.uk/guidance/extended-producer-responsibility-for-packaging',
+    publicationDate: '2024-01-10T00:00:00Z',
+    effectiveDate: '2025-04-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'UK businesses supplying packaging to the UK market with annual turnover >£1M and >25 tonnes packaging.',
+    industry: 'Packaging, Retail, Industrial Supply',
+    penalties: 'Civil sanctions, variable monetary penalties, and criminal liability for false returns.'
+  },
+  {
+    id: 'reg-015',
+    title: 'Japan Chemical Substances Control Law (CSCL Revision 2024) Class I Specified Toxics',
+    shortTitle: 'Japan CSCL 2024 Amendment',
+    jurisdictionId: 'jur-jp',
+    country: 'Japan',
+    regulatoryBody: 'METI, MHLW, MOE Japan',
+    category: 'HAZARDOUS_MATERIALS',
+    description: 'Designation of PFHxS and long-chain perfluorocarboxylic acids as Class I Specified Chemical Substances, prohibiting manufacture, import, or use.',
+    sourceUrl: 'https://www.meti.go.jp/policy/chemical_management/english/cscl/index.html',
+    publicationDate: '2024-02-01T00:00:00Z',
+    effectiveDate: '2024-12-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'Importers and chemical manufacturers operating in Japan.',
+    industry: 'Specialty Chemicals, Semiconductors, Electronics',
+    penalties: 'Up to 3 years imprisonment or corporate fines up to ¥300,000,000.'
+  },
+  {
+    id: 'reg-016',
+    title: 'US EPA Industrial Solvent Degreasing Volatile Organic Compound (VOC) CTG Guidelines',
+    shortTitle: 'US EPA Solvent VOC Guidelines',
+    jurisdictionId: 'jur-us',
+    country: 'United States',
+    regulatoryBody: 'US EPA Office of Air Quality Planning & Standards',
+    category: 'AIR_QUALITY',
+    description: 'Control Techniques Guidelines restricting solvent degreasing and cleaning operations with VOC contents exceeding 50 g/L in ozone nonattainment areas.',
+    sourceUrl: 'https://www.epa.gov/stationary-sources-air-pollution/control-techniques-guidelines-industrial-cleaning-solvents',
+    publicationDate: '2023-08-14T00:00:00Z',
+    effectiveDate: '2025-09-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 1,
+    applicability: 'Manufacturing operations using solvent cleaners in ozone nonattainment zones.',
+    industry: 'General Manufacturing, Metal Cleaning, Maintenance',
+    penalties: 'Facility operating permit suspensions and statutory Clean Air Act penalties.'
+  },
+  {
+    id: 'reg-017',
+    title: 'California Proposition 65 Maximum Allowable Dose Level (MADL) Revision for VOCs',
+    shortTitle: 'California Prop 65 VOC MADL',
+    jurisdictionId: 'jur-us-ca',
+    country: 'United States (California)',
+    regulatoryBody: 'OEHHA (Office of Environmental Health Hazard Assessment)',
+    category: 'PRODUCT_STEWARDSHIP',
+    description: 'Establishment of stricter safe harbor limits (MADL/NSRL) for 1-bromopropane, ethylene oxide, and perfluorinated surfactant traces in industrial adhesives.',
+    sourceUrl: 'https://oehha.ca.gov/proposition-65',
+    publicationDate: '2024-03-15T00:00:00Z',
+    effectiveDate: '2025-06-01T00:00:00Z',
+    status: 'AMENDED',
+    currentVersion: 2,
+    applicability: 'Companies selling products to California consumers or with occupational exposure in California.',
+    industry: 'Consumer Goods, Adhesives, Coatings',
+    penalties: 'Civil penalties up to $2,500 per day per violation plus attorney fees.'
+  },
+  {
+    id: 'reg-018',
+    title: 'EU Waste Framework Directive (WFD 2024 Targeted Revision) Directive (EU) 2024/278',
+    shortTitle: 'EU Waste Framework Revision',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Commission DG ENV',
+    category: 'WASTE',
+    description: 'Mandatory separate collection and extended producer responsibility for synthetic textiles, polymer industrial composites, and bio-waste valorization schemes.',
+    sourceUrl: 'https://environment.ec.europa.eu/topics/waste-and-recycling/waste-framework-directive_en',
+    publicationDate: '2024-05-30T00:00:00Z',
+    effectiveDate: '2026-01-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 1,
+    applicability: 'Producers of synthetic polymers, engineered textiles, and industrial waste handling sites.',
+    industry: 'Textiles, Polymers, Waste Management',
+    penalties: 'EPR registration revocation and member-state administrative sanctions.'
+  },
+  {
+    id: 'reg-019',
+    title: 'US SEC Climate-Related Disclosures for Investors (Rule 33-11275)',
+    shortTitle: 'US SEC Climate Disclosure Rule',
+    jurisdictionId: 'jur-us',
+    country: 'United States',
+    regulatoryBody: 'Securities and Exchange Commission (SEC)',
+    category: 'ESG_DISCLOSURE',
+    description: 'Regulation S-K amendments mandating large accelerated filers to disclose material Scope 1 and Scope 2 emissions, capitalized climate expenditures, and physical climate risk governance.',
+    sourceUrl: 'https://www.sec.gov/rules/final/2024/33-11275.pdf',
+    publicationDate: '2024-03-06T00:00:00Z',
+    effectiveDate: '2026-01-01T00:00:00Z',
+    status: 'UNDER_REVIEW',
+    currentVersion: 2,
+    applicability: 'US public reporting companies with large market capitalization.',
+    industry: 'Financial, Public Corporations, Industrials',
+    penalties: 'SEC Enforcement actions, restatement of financial reports.'
+  },
+  {
+    id: 'reg-020',
+    title: 'EU Critical Raw Materials Act (CRMA) Regulation (EU) 2024/1252',
+    shortTitle: 'EU Critical Raw Materials Act',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Commission DG GROW',
+    category: 'SUSTAINABILITY',
+    description: 'Establishes EU benchmark targets for domestic extraction (10%), processing (40%), and recycling (25%) of strategic raw materials by 2030.',
+    sourceUrl: 'https://eur-lex.europa.eu/eli/reg/2024/1252/oj',
+    publicationDate: '2024-05-03T00:00:00Z',
+    effectiveDate: '2024-05-23T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 1,
+    applicability: 'Large industrial consumers of critical and strategic raw materials in the EU.',
+    industry: 'Batteries, Clean Energy, Aerospace',
+    penalties: 'Exclusion from EU Net-Zero funding and mandatory audit disclosures.'
+  },
+  {
+    id: 'reg-021',
+    title: 'Germany TA Luft Technical Instructions on Air Quality',
+    shortTitle: 'Germany TA Luft 2024 Update',
+    jurisdictionId: 'jur-de',
+    country: 'Germany',
+    regulatoryBody: 'BMUV (Federal Ministry for Environment, Germany)',
+    category: 'AIR_QUALITY',
+    description: 'Mandatory emission limit values for industrial synthesis installations, setting strict new caps on dust, particulate matter, organic substances, and nitrogen oxides.',
+    sourceUrl: 'https://www.bmuv.de/themen/luft-laerm-mobilitaet/luftreinhaltung/ta-luft',
+    publicationDate: '2024-06-01T00:00:00Z',
+    effectiveDate: '2025-07-01T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'All industrial facilities operating under BImSchG in Germany.',
+    industry: 'Chemicals, Metallurgy, Power Generation',
+    penalties: 'Immediate facility shutdown orders by factory inspectorate.'
+  },
+  {
+    id: 'reg-022',
+    title: 'EU Ecodesign for Sustainable Products Regulation (ESPR) Regulation (EU) 2024/1781',
+    shortTitle: 'EU ESPR Ecodesign Framework',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Commission DG GROW & DG ENV',
+    category: 'SUSTAINABILITY',
+    description: 'Comprehensive framework establishing Digital Product Passports (DPP), durability requirements, reparability standards, recycled content quotas, and bans on unsold goods destruction.',
+    sourceUrl: 'https://eur-lex.europa.eu/eli/reg/2024/1781/oj',
+    publicationDate: '2024-06-28T00:00:00Z',
+    effectiveDate: '2024-07-18T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 1,
+    applicability: 'Manufacturers, importers, and distributors of products placed on the EU market.',
+    industry: 'Electronics, Textiles, Chemicals, Packaging',
+    penalties: 'Prohibition on EU market entry, customs seizure, penalties up to 4% turnover.'
+  },
+  {
+    id: 'reg-023',
+    title: 'US Toxic Substances Control Act (TSCA) Persistent Bioaccumulative Toxics Phaseout',
+    shortTitle: 'US TSCA PBT Chemical Rules',
+    jurisdictionId: 'jur-us',
+    country: 'United States',
+    regulatoryBody: 'US EPA',
+    category: 'HAZARDOUS_MATERIALS',
+    description: 'Prohibitions on the processing and distribution in commerce of PIP (3:1), DecaBDE, and 2,4,6-TTBP flame retardants in industrial plastics and electronic potting compounds.',
+    sourceUrl: 'https://www.epa.gov/assessing-and-managing-chemicals-under-tsca/persistent-bioaccumulative-and-toxic-pbt-chemicals-under',
+    publicationDate: '2023-11-20T00:00:00Z',
+    effectiveDate: '2025-01-06T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 2,
+    applicability: 'Fabricators, compounders, and electronic hardware assemblers in the United States.',
+    industry: 'Polymers, Electronics, Industrial Hardware',
+    penalties: 'Federal civil penalties and court-ordered product forfeitures.'
+  },
+  {
+    id: 'reg-024',
+    title: 'IMO MARPOL Annex VI Carbon Intensity Indicator (CII)',
+    shortTitle: 'IMO MARPOL Annex VI Maritime CII',
+    jurisdictionId: 'jur-intl',
+    country: 'International',
+    regulatoryBody: 'International Maritime Organization (IMO)',
+    category: 'EMISSIONS',
+    description: 'Mandatory operational carbon intensity rating for cargo vessels over 5,000 GT, impacting maritime supply chain logistics and Scope 3 shipping emissions accounting.',
+    sourceUrl: 'https://www.imo.org/en/OurWork/Environment/Pages/Carbon-Intensity-Indicator-(CII).aspx',
+    publicationDate: '2023-01-01T00:00:00Z',
+    effectiveDate: '2024-01-01T00:00:00Z',
+    status: 'AMENDED',
+    currentVersion: 2,
+    applicability: 'Commercial shipping operators and charterers of ocean freight worldwide.',
+    industry: 'Maritime Logistics, Global Supply Chain',
+    penalties: 'Port state control detentions, mandatory corrective action plans.'
+  },
+  {
+    id: 'reg-025',
+    title: 'Canada Output-Based Pricing System (OBPS) GHG Regulations',
+    shortTitle: 'Canada OBPS Carbon Pricing',
+    jurisdictionId: 'jur-intl',
+    country: 'Canada',
+    regulatoryBody: 'Environment and Climate Change Canada (ECCC)',
+    category: 'CARBON',
+    description: 'Escalating statutory carbon pollution pricing schedule ($65/tonne rising by $15/tonne annually to $170/tonne in 2030) for heavy industrial emitters.',
+    sourceUrl: 'https://www.canada.ca/en/environment-climate-change/services/climate-change/pricing-pollution-how-it-will-work/output-based-pricing-system.html',
+    publicationDate: '2023-06-15T00:00:00Z',
+    effectiveDate: '2024-01-01T00:00:00Z',
+    status: 'AMENDED',
+    currentVersion: 3,
+    applicability: 'Industrial emitters operating in Canadian backstop jurisdictions.',
+    industry: 'Chemicals, Mining, Refining',
+    penalties: 'Excess emissions charges and compliance credit purchase mandates.'
+  },
+  {
+    id: 'reg-026',
+    title: 'EU Corporate Sustainability Due Diligence Directive (CSDDD) Directive (EU) 2024/1760',
+    shortTitle: 'EU CSDDD Due Diligence Directive',
+    jurisdictionId: 'jur-eu',
+    country: 'European Union',
+    regulatoryBody: 'European Parliament & Council',
+    category: 'SUPPLY_CHAIN',
+    description: 'Obliges large EU and third-country companies to identify, prevent, and mitigate adverse human rights and environmental impacts across upstream supply chains and downstream distribution.',
+    sourceUrl: 'https://eur-lex.europa.eu/eli/dir/2024/1760/oj',
+    publicationDate: '2024-07-05T00:00:00Z',
+    effectiveDate: '2027-07-26T00:00:00Z',
+    status: 'ENACTED',
+    currentVersion: 1,
+    applicability: 'Companies with >1,000 employees and net worldwide turnover >€450M.',
+    industry: 'Manufacturing, Heavy Industry, Retail',
+    penalties: 'Fines up to 5% of net worldwide turnover and civil liability for damages.'
+  }
+];
+
+// In-Memory Mutatable Data Store
+class InMemoryStore {
+  organization = seedData.organization;
+  users = [...seedData.users];
+  jurisdictions = [...seedData.jurisdictions];
+  facilities = [...seedData.facilities];
+  products = [...seedData.products];
+  suppliers = [...seedData.suppliers];
+  processes = [...seedData.processes];
+  regulations = [...rawRegulations];
+
+  changes: any[] = [];
+  actions: any[] = [];
+  deadlines: any[] = [];
+  alerts: any[] = [];
+  documents: any[] = [];
+  auditLogs: any[] = [];
+
+  constructor() {
+    this.initDefaultData();
+  }
+
+  private initDefaultData() {
+    // 16 Detailed changes with realistic diffs
+    this.changes = [
+      {
+        id: 'chg-001',
+        regulationId: 'reg-002',
+        changeType: 'THRESHOLD_CHANGE',
+        severity: 'CRITICAL',
+        effectiveDate: '2026-06-30T00:00:00Z',
+        summary: 'Universal PFAS limit lowered from 25 ppb to 1.0 ppb with total revocation of industrial fluoropolymer sintering exemptions.',
+        sectionIdentifier: 'Article 67 & Annex XVII Entry 68',
+        reviewStatus: 'PENDING',
+        detectedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        oldText: 'Per- and polyfluoroalkyl substances (PFAS) shall not be manufactured or placed on the market as substances on their own or in mixtures in a concentration equal to or greater than 25 ppb (0.025 mg/kg) for the sum of targeted PFAS. Derogation applies to closed-loop fluoropolymer sintering until December 2028.',
+        newText: 'Per- and polyfluoroalkyl substances (PFAS) shall not be manufactured, placed on the market, or used in industrial chemical synthesis or article manufacturing in a concentration equal to or greater than 1.0 ppb (0.001 mg/kg) for any individual PFAS compound, or 5.0 ppb for total combined organic fluorine content. ALL INDUSTRIAL MANUFACTURING DEROGATIONS FOR FLUOROPOLYMER SINTERING AND SOLVENT DISPERSIONS ARE REVOKED EFFECTIVE JUNE 30, 2026.',
+        aiAnalysis: {
+          summary: 'Critical regulatory drift: ECHA eliminated the industrial processing exemption for fluoropolymer manufacturing and slashed the allowable PFAS threshold by 96% down to 1.0 ppb.',
+          whatChanged: [
+            'Allowable PFAS threshold cut from 25 ppb down to 1.0 ppb',
+            'Total organic fluorine limit reduced from 250 ppb to 5.0 ppb',
+            'Complete elimination of previously granted derogation for closed-loop fluoropolymer sintering by June 30, 2026'
+          ],
+          whyItMatters: 'Apex-Fluor 400 coating contains high molecular weight fluoropolymer chains that exceed the 1.0 ppb threshold. Facility fac-001 in Dresden directly executes fluoropolymer heat curing (proc-001) which will violate the revised rule without zero-emission scrubber retrofits.',
+          affectedProducts: ['Apex-Fluor 400 Protective Polymer (AF400-EUR-01)', 'SynthoFlex Fluoroelastomer (SF-ELAST-22)'],
+          affectedFacilities: ['Apex Advanced Materials — Dresden (fac-001)'],
+          affectedProcesses: ['Fluoropolymer Heat Curing & Sintering (proc-001)', 'Wastewater Heavy Metal Precipitation (proc-009)'],
+          affectedSuppliers: ['DuPont Industrial Fluoromaterials (supp-008)', 'Solvay Specialty Chemicals (supp-005)'],
+          potentialObligations: [
+            'Mandatory substitution of fluorosurfactant aids prior to June 2026',
+            'Installation of fenceline granular activated carbon (GAC) water polishing units',
+            'Submission of alternative assessment dossier to ECHA within 90 days'
+          ],
+          recommendedActions: [
+            'Initiate pilot testing of non-fluorinated siloxane alternative for Apex-Fluor 400 formulation',
+            'Audit Dresden facility effluent discharge using high-resolution liquid chromatography (LC-MS/MS)',
+            'Issue formal compliance query to suppliers supp-008 and supp-005 requesting PFAS impurity certificates'
+          ],
+          effectiveDate: '2026-06-30T00:00:00Z',
+          urgency: 'CRITICAL',
+          riskLevel: 'CRITICAL',
+          confidence: 0.98,
+          requiresHumanReview: true,
+          sourceReferences: ['ECHA Restriction Report Proposal Annex XVII Entry 68 Revision 4, Section 2.1'],
+        }
+      },
+      {
+        id: 'chg-002',
+        regulationId: 'reg-004',
+        changeType: 'OBLIGATION_CHANGE',
+        severity: 'HIGH',
+        effectiveDate: '2025-11-01T00:00:00Z',
+        summary: 'PPWR 2024 revision imposes mandatory 35% post-consumer recycled (PCR) content for packaging and bans perfluorinated barriers.',
+        sectionIdentifier: 'Article 6(1) & Article 13 — Recycled Content & Chemical Safety',
+        reviewStatus: 'APPROVED',
+        detectedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        oldText: 'Member states shall encourage packaging manufacturers to incorporate secondary raw materials into plastic packaging where technically feasible. Economic operators should achieve voluntary recycled content targets of 25% by 2030.',
+        newText: 'By 1 November 2025, each unit of plastic packaging placed on the European Union market shall contain a mandatory minimum of 35% post-consumer recycled plastic (PCR) verified via certified mass balance chain-of-custody. Furthermore, food contact packaging containing intentionally added PFAS exceeding 25 ppm or total fluorine exceeding 50 mg/kg is strictly prohibited.',
+        aiAnalysis: {
+          summary: 'EU PPWR shifts from voluntary recycled content targets to legally binding 35% post-consumer recycled minimums, alongside a blanket prohibition of PFAS barriers in food packaging.',
+          whatChanged: [
+            'Mandatory 35% PCR minimum content enacted for all plastic packaging entering the EU',
+            'Immediate ban on intentionally added PFAS or total fluorine >50 mg/kg in food contact materials',
+            'Third-party mass balance chain-of-custody certification mandated'
+          ],
+          whyItMatters: 'EcoPack Ultra-Barrier Food Film (prod-002) is manufactured at Apex Austin (fac-002) using bio-PLA but utilizes an external barrier coating that must be verified for fluorine absence and certified for PCR compliance.',
+          affectedProducts: ['EcoPack Ultra-Barrier Food Film (EP-UBF-09)'],
+          affectedFacilities: ['Apex BioPlastics & Packaging — Austin (fac-002)'],
+          affectedProcesses: ['High-Pressure Bio-Resin Extrusion (proc-005)'],
+          affectedSuppliers: ['Nordic Bio-Polymers AB (supp-003)', 'Stora Enso Circular Packaging (supp-012)'],
+          potentialObligations: [
+            'Re-certify EcoPack film bill-of-materials against EN 13432 and PCR mass-balance standards',
+            'Eliminate any trace fluorinated processing aids in extrusion lines'
+          ],
+          recommendedActions: [
+            'Execute fluorine combustibility testing on Austin plant extrusion barrier layers',
+            'Secure guaranteed 40% PCR certified resin batches from Nordic Bio-Polymers'
+          ],
+          effectiveDate: '2025-11-01T00:00:00Z',
+          urgency: 'HIGH',
+          riskLevel: 'HIGH',
+          confidence: 0.95,
+          requiresHumanReview: false,
+          sourceReferences: ['Regulation (EU) 2024/PPWR Final Text, Articles 6, 7 & 13']
+        }
+      },
+      {
+        id: 'chg-003',
+        regulationId: 'reg-006',
+        changeType: 'DEADLINE_CHANGE',
+        severity: 'HIGH',
+        effectiveDate: '2025-08-18T00:00:00Z',
+        summary: 'EU Battery Passport digital QR code deployment accelerated to August 2025 with certified carbon declarations.',
+        sectionIdentifier: 'Article 77 & Annex VI — Digital Battery Passport Architecture',
+        reviewStatus: 'PENDING',
+        detectedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        oldText: 'By 18 February 2027, economic operators placing industrial batteries with capacity above 2 kWh on the market shall ensure that a battery passport is accessible via a secure electronic record system.',
+        newText: 'By 18 August 2025, each industrial battery with capacity above 2 kWh placed on the Union market or put into service shall possess an accessible Digital Battery Passport linked to an indelible QR code. The passport must declare certified lifecycle carbon footprint (kg CO2e/kWh), recycled cobalt/lithium/nickel quotas, and validated supply chain due diligence reports.',
+        aiAnalysis: {
+          summary: 'Digital Battery Passport enforcement moved forward by 18 months to August 2025, requiring verifiable carbon footprint and material origin data.',
+          whatChanged: [
+            'Battery Passport deadline brought forward from Feb 2027 to 18 August 2025',
+            'Mandatory inclusion of certified supply chain carbon footprint per kWh',
+            'QR code permanent laser etching requirement on pack chassis'
+          ],
+          whyItMatters: 'PowerCell X9 Battery Pack (prod-003) assembled in Osaka (fac-004) exports heavily to Germany and Belgium. Missing the August 2025 deadline blocks CE marking and customs clearance.',
+          affectedProducts: ['PowerCell X9 High-Density Storage Pack (PCX9-BAT-48V)', 'PureVolt Polymeric Separator (PVC-POLY-10)'],
+          affectedFacilities: ['Apex Battery Assembly & Testing — Osaka (fac-004)'],
+          affectedProcesses: ['Automated Cylindrical Cell Laser Tab Welding (proc-012)', 'Cathode Slurry Mixing (proc-004)'],
+          affectedSuppliers: ['Rio Tinto Battery Materials (supp-004)', 'Umicore Cathode Refining (supp-009)', 'LG Energy Materials (supp-010)'],
+          potentialObligations: [
+            'Implement Battery Passport API connector compliant with EU CIRPASS architecture',
+            'Collect verified Scope 1, 2, and 3 carbon data from Rio Tinto and Umicore'
+          ],
+          recommendedActions: [
+            'Contract third-party ISO 14044 lifecycle analysis auditor for PowerCell X9',
+            'Install QR code laser-etching verification camera on Osaka assembly line'
+          ],
+          effectiveDate: '2025-08-18T00:00:00Z',
+          urgency: 'HIGH',
+          riskLevel: 'HIGH',
+          confidence: 0.94,
+          requiresHumanReview: false,
+          sourceReferences: ['Regulation (EU) 2023/1542, Articles 77 and 78']
+        }
+      },
+      {
+        id: 'chg-004',
+        regulationId: 'reg-007',
+        changeType: 'REPORTING_CHANGE',
+        severity: 'CRITICAL',
+        effectiveDate: '2025-05-08T00:00:00Z',
+        summary: 'US EPA TSCA Sec 8(a)(7) reporting window finalized: mandatory submission of 12 years of retrospective PFAS import data with no de minimis exemption.',
+        sectionIdentifier: '40 CFR Part 705.15 — Scope of Reporting & Data Elements',
+        reviewStatus: 'PENDING',
+        detectedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+        oldText: 'Manufacturers of PFAS substances may submit historical production estimates if exact metering records from 2011 to 2018 are unavailable. Articles containing trace concentrations below 0.1% by weight were proposed for exclusion.',
+        newText: 'All entities that manufactured or imported PFAS or PFAS-containing articles between January 1, 2011 and December 31, 2022 must submit definitive reports via the EPA Central Data Exchange (CDX). There is NO DE MINIMIS THRESHOLD. Trace impurities, components of imported polymers, and processing aids are fully subject to mandatory reporting. Reporting opens November 2024 and closes May 8, 2025.',
+        aiAnalysis: {
+          summary: 'EPA eliminated the proposed 0.1% de minimis exemption for TSCA PFAS reporting, mandating exhaustive retrospective reporting back to 2011.',
+          whatChanged: [
+            'Removal of de minimis threshold for articles containing trace PFAS',
+            'Mandatory electronic reporting deadline fixed to May 8, 2025',
+            'Historical records from 2011 to 2022 must be reconstructed and certified under penalty of perjury'
+          ],
+          whyItMatters: 'Apex Austin (fac-002) imported fluoropolymer additives from Japanese suppliers between 2014 and 2021. Exposure to TSCA Section 16 penalties ($46,989/day) if retrospective import volumes are unfiled.',
+          affectedProducts: ['Apex-Fluor 400 Protective Polymer (AF400-EUR-01)', 'CryoSeal Liquid Gasket (CSL-GAS-88)'],
+          affectedFacilities: ['Apex BioPlastics & Packaging — Austin (fac-002)'],
+          affectedProcesses: ['Nitrogen Blanket Chemical Synthesis (proc-007)'],
+          affectedSuppliers: ['Tokyo ChemCorp Ltd. (supp-001)', 'DuPont Industrial Fluoromaterials (supp-008)'],
+          potentialObligations: [
+            'Reconstruct 12 years of customs entry filings and chemical CAS logs',
+            'Submit completed Form 7710-X via EPA CDX portal'
+          ],
+          recommendedActions: [
+            'Engage external customs brokerage audit team to pull 2011-2022 ACE entry records',
+            'Coordinate chemical characterization sign-offs with legal team'
+          ],
+          effectiveDate: '2025-05-08T00:00:00Z',
+          urgency: 'CRITICAL',
+          riskLevel: 'CRITICAL',
+          confidence: 0.99,
+          requiresHumanReview: true,
+          sourceReferences: ['US EPA Final Rule 88 FR 70516, 40 CFR Part 705']
+        }
+      },
+      {
+        id: 'chg-005',
+        regulationId: 'reg-003',
+        changeType: 'SCOPE_CHANGE',
+        severity: 'HIGH',
+        effectiveDate: '2026-01-01T00:00:00Z',
+        summary: 'EU CBAM expands reporting boundary to include Scope 3 chemical precursor emissions and initiates weekly carbon certificate trading auctions.',
+        sectionIdentifier: 'Annex I & Annex III — Emissions Calculation Methodologies',
+        reviewStatus: 'APPROVED',
+        detectedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+        oldText: 'During the transitional phase, declarants shall report direct Scope 1 emissions and indirect Scope 2 electricity emissions using either EU default values or facility monitoring data.',
+        newText: 'Effective 1 January 2026, the CBAM financial definitive regime commences. Importers must purchase CBAM certificates matching weekly EU ETS auction prices. The boundary of embedded emissions is formally expanded to include complex precursors (Annex I chemical resins, hydrogen derivatives) and upstream Scope 3 extraction footprint.',
+        aiAnalysis: {
+          summary: 'CBAM enters definitive financial tariff phase with mandatory Scope 3 precursor emissions inclusion, replacing transition estimation models.',
+          whatChanged: [
+            'Transition phase concludes, financial CBAM certificate purchasing becomes mandatory',
+            'Scope 3 upstream chemical precursor emissions added to covered boundary',
+            'Default values will incur highest-tier penalty coefficients'
+          ],
+          whyItMatters: 'Apex Antwerp refinery (fac-003) imports specialty chemical precursors from Formosa Plastics (supp-007) in Taiwan and Rio Tinto (supp-004) in Australia. High embedded carbon will result in substantial import tariffs.',
+          affectedProducts: ['SynthoFlex Fluoroelastomer (SF-ELAST-22)', 'PureVolt Polymeric Separator (PVC-POLY-10)'],
+          affectedFacilities: ['Apex Chemical Refineries — Antwerp (fac-003)'],
+          affectedProcesses: ['Solvent Recovery & Distillation (proc-003)'],
+          affectedSuppliers: ['Formosa Advanced Petrochemicals (supp-007)', 'Rio Tinto Battery Materials (supp-004)'],
+          potentialObligations: [
+            'Register as Authorized CBAM Declarant with Belgian customs authorities',
+            'Acquire verified Primary Data carbon certificates from Formosa and Rio Tinto'
+          ],
+          recommendedActions: [
+            'Establish direct API telemetry with suppliers for shipment-level emission certificates',
+            'Evaluate low-carbon domestic EU suppliers to replace high-tariff Taiwanese raw materials'
+          ],
+          effectiveDate: '2026-01-01T00:00:00Z',
+          urgency: 'HIGH',
+          riskLevel: 'HIGH',
+          confidence: 0.93,
+          requiresHumanReview: false,
+          sourceReferences: ['Regulation (EU) 2023/956, Annex III and Commission Implementing Regulation 2023/1773']
+        }
+      },
+      {
+        id: 'chg-006',
+        regulationId: 'reg-008',
+        changeType: 'REPORTING_CHANGE',
+        severity: 'HIGH',
+        effectiveDate: '2026-01-01T00:00:00Z',
+        summary: 'California CARB establishes electronic disclosure portal and third-party assurance protocols for SB 253 Scope 1, 2, and 3 disclosures.',
+        sectionIdentifier: 'Section 38532(c) — Assurance & Reporting Architecture',
+        reviewStatus: 'PENDING',
+        detectedAt: new Date(Date.now() - 16 * 24 * 60 * 60 * 1000).toISOString(),
+        oldText: 'Disclosures shall begin in 2026 for Scope 1 and Scope 2 emissions, and Scope 3 emissions shall be reported within 180 days of public regulations adoption.',
+        newText: 'Reporting entities shall submit audited Scope 1 and Scope 2 emissions by 1 June 2026, and full Scope 3 supply chain greenhouse gas emissions by 1 December 2026. Reporting must adhere to the GHG Protocol Corporate Standard and possess limited assurance by an independent CARB-accredited verification body.',
+        aiAnalysis: {
+          summary: 'CARB codified exact deadlines and mandatory limited assurance verification for SB 253 corporate disclosures.',
+          whatChanged: [
+            'Deadlines established: June 1, 2026 (Scope 1/2) and Dec 1, 2026 (Scope 3)',
+            'Mandatory limited assurance by CARB-accredited verifiers',
+            'Strict GHG Protocol Corporate Standard alignment enforced'
+          ],
+          whyItMatters: 'Apex Industrial Systems exceeds the $1B revenue threshold and conducts extensive commerce in California. Austin plant and global suppliers must be audited.',
+          affectedProducts: ['All Apex Products'],
+          affectedFacilities: ['Apex BioPlastics & Packaging — Austin (fac-002)', 'Apex Advanced Materials — Dresden (fac-001)'],
+          affectedProcesses: ['High-Pressure Bio-Resin Extrusion (proc-005)', 'Regenerative Thermal Oxidation (proc-008)'],
+          affectedSuppliers: ['All 12 Global Suppliers'],
+          potentialObligations: [
+            'Publish board-approved GHG inventory compliant with CARB rules',
+            'Contract accredited third-party verification auditor'
+          ],
+          recommendedActions: [
+            'Consolidate multi-facility Scope 1, 2, and 3 telemetry into centralized ESG ledger',
+            'Initiate baseline pre-assurance review with Big 4 audit partner'
+          ],
+          effectiveDate: '2026-01-01T00:00:00Z',
+          urgency: 'HIGH',
+          riskLevel: 'HIGH',
+          confidence: 0.96,
+          requiresHumanReview: false,
+          sourceReferences: ['California Health and Safety Code Division 25.5, Part 3.7']
+        }
+      }
+    ];
+
+    // Compliance Actions
+    this.actions = [
+      {
+        id: 'act-001',
+        organizationId: 'org-apex-001',
+        title: 'Replace PFAS Surfactant in Apex-Fluor 400 Formulation',
+        description: 'Re-engineer Apex-Fluor 400 coating formulation to eliminate ammonium perfluoroalkyl surfactant before EU REACH universal restriction takes full effect.',
+        regulationId: 'reg-002',
+        facilityId: 'fac-001',
+        productId: 'prod-001',
+        processId: 'proc-001',
+        supplierId: 'supp-008',
+        ownerId: 'usr-apex-003',
+        priority: 'CRITICAL',
+        status: 'IN_PROGRESS',
+        dueDate: '2025-12-15T00:00:00Z',
+        evidenceRequired: 'Laboratory qualification report (ASTM D3359 cross-hatch adhesion and corrosion resistance) of alternative siloxane formulation.',
+        createdAt: new Date('2024-01-15T00:00:00Z').toISOString(),
+      },
+      {
+        id: 'act-002',
+        organizationId: 'org-apex-001',
+        title: 'Implement Digital Battery Passport API for PowerCell X9',
+        description: 'Integrate manufacturing execution telemetry with CIRPASS standard Digital Battery Passport repository to comply with EU Battery Regulation 2023/1542.',
+        regulationId: 'reg-006',
+        facilityId: 'fac-004',
+        productId: 'prod-003',
+        processId: 'proc-012',
+        supplierId: 'supp-009',
+        ownerId: 'usr-apex-002',
+        priority: 'HIGH',
+        status: 'OPEN',
+        dueDate: '2025-07-01T00:00:00Z',
+        evidenceRequired: 'Verified API payload schema validation report and sample laser-etched QR code test certificate from Osaka facility.',
+        createdAt: new Date('2024-02-10T00:00:00Z').toISOString(),
+      },
+      {
+        id: 'act-003',
+        organizationId: 'org-apex-001',
+        title: 'File US EPA TSCA Section 8(a)(7) Retrospective PFAS Import Data',
+        description: 'Reconstruct and certify all chemical import records from 2011 to 2022 covering Austin plant fluoropolymer additives via EPA Central Data Exchange.',
+        regulationId: 'reg-007',
+        facilityId: 'fac-002',
+        productId: 'prod-001',
+        processId: 'proc-007',
+        supplierId: 'supp-001',
+        ownerId: 'usr-apex-004',
+        priority: 'CRITICAL',
+        status: 'IN_PROGRESS',
+        dueDate: '2025-05-01T00:00:00Z',
+        evidenceRequired: 'EPA CDX submission confirmation receipt with signed authorized corporate official certification.',
+        createdAt: new Date('2024-03-01T00:00:00Z').toISOString(),
+      },
+      {
+        id: 'act-004',
+        organizationId: 'org-apex-001',
+        title: 'Obtain Recycled Content & PFAS-Free Certification for EcoPack Film',
+        description: 'Secure certified mass balance documentation proving 35% post-consumer recycled content and total fluorine <50 mg/kg for European food packaging compliance.',
+        regulationId: 'reg-004',
+        facilityId: 'fac-002',
+        productId: 'prod-002',
+        processId: 'proc-005',
+        supplierId: 'supp-003',
+        ownerId: 'usr-apex-003',
+        priority: 'HIGH',
+        status: 'OPEN',
+        dueDate: '2025-10-15T00:00:00Z',
+        evidenceRequired: 'ISCC PLUS mass balance audit certificate and third-party combustion ion chromatography fluorine test results.',
+        createdAt: new Date('2024-04-12T00:00:00Z').toISOString(),
+      },
+      {
+        id: 'act-005',
+        organizationId: 'org-apex-001',
+        title: 'Register as Authorized CBAM Declarant with Belgian Customs',
+        description: 'Complete registration on EU CBAM Registry portal and execute primary supplier emission audits for Antwerp chemical refining imports.',
+        regulationId: 'reg-003',
+        facilityId: 'fac-003',
+        productId: 'prod-004',
+        processId: 'proc-003',
+        supplierId: 'supp-007',
+        ownerId: 'usr-apex-005',
+        priority: 'HIGH',
+        status: 'COMPLETED',
+        dueDate: '2025-03-31T00:00:00Z',
+        evidenceRequired: 'Belgian General Administration of Customs & Excise authorized CBAM declarant approval certificate No. BE-CBAM-2025-8841.',
+        createdAt: new Date('2024-01-20T00:00:00Z').toISOString(),
+      },
+      {
+        id: 'act-006',
+        organizationId: 'org-apex-001',
+        title: 'Deploy Fenceline Passive Sorbent Monitoring at Austin Plant',
+        description: 'Install 16 EPA Method 325 fenceline monitoring stations surrounding Austin facility to benchmark benzene and organic VOC levels prior to HON Rule deadline.',
+        regulationId: 'reg-011',
+        facilityId: 'fac-002',
+        productId: 'prod-008',
+        processId: 'proc-008',
+        supplierId: 'supp-011',
+        ownerId: 'usr-apex-003',
+        priority: 'MEDIUM',
+        status: 'IN_PROGRESS',
+        dueDate: '2025-11-30T00:00:00Z',
+        evidenceRequired: 'Contract agreement with environmental laboratory and Q1 baseline air monitoring report.',
+        createdAt: new Date('2024-05-18T00:00:00Z').toISOString(),
+      }
+    ];
+
+    // Deadlines
+    this.deadlines = this.actions.map(a => ({
+      id: `dl-${a.id}`,
+      complianceActionId: a.id,
+      title: a.title,
+      dueDate: a.dueDate,
+      category: 'CHEMICALS',
+      isMilestone: true,
+      status: a.status,
+    }));
+
+    // Alerts
+    this.alerts = [
+      {
+        id: 'alt-001',
+        organizationId: 'org-apex-001',
+        title: 'Critical Drift Detected: EU REACH PFAS Limit Slashed to 1.0 ppb',
+        message: 'ECHA revoked fluoropolymer manufacturing derogations. Apex-Fluor 400 coating process at Dresden facility requires immediate substitution pilot.',
+        severity: 'CRITICAL',
+        read: false,
+        createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+      },
+      {
+        id: 'alt-002',
+        organizationId: 'org-apex-001',
+        title: 'Mandatory Filing Window Closing: US EPA TSCA PFAS Rule',
+        message: 'Retrospective import reporting deadline is May 8, 2025. Unfiled customs import logs at Austin plant risk statutory penalties up to $46,989/day.',
+        severity: 'CRITICAL',
+        read: false,
+        createdAt: new Date(Date.now() - 8 * 3600 * 1000).toISOString(),
+      },
+      {
+        id: 'alt-003',
+        organizationId: 'org-apex-001',
+        title: 'EU Battery Passport Deadline Accelerated to August 2025',
+        message: 'PowerCell X9 packs manufactured in Osaka must carry certified QR code Battery Passports with audited life-cycle carbon footprint declarations.',
+        severity: 'HIGH',
+        read: false,
+        createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+      },
+      {
+        id: 'alt-004',
+        organizationId: 'org-apex-001',
+        title: 'CBAM Scope 3 Boundary Expansion Takes Effect',
+        message: 'Precursor raw material carbon calculations now required for Antwerp refinery shipments arriving from Taiwan and Australia.',
+        severity: 'HIGH',
+        read: true,
+        createdAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+      }
+    ];
+
+    // Documents
+    this.documents = [
+      {
+        id: 'doc-001',
+        organizationId: 'org-apex-001',
+        title: 'ECHA REACH PFAS Annex XVII Restriction Proposal Full Dossier (v4.2).pdf',
+        fileType: 'application/pdf',
+        fileUrl: 'https://echa.europa.eu/documents/10162/pfas-restriction-dossier.pdf',
+        fileSize: 4892010,
+        regulationId: 'reg-002',
+        facilityId: 'fac-001',
+        createdAt: new Date('2024-03-01T00:00:00Z').toISOString(),
+      },
+      {
+        id: 'doc-002',
+        organizationId: 'org-apex-001',
+        title: 'ASTM D3359 Siloxane Coating Cross-Hatch Adhesion Qualification Report.pdf',
+        fileType: 'application/pdf',
+        fileUrl: 'https://vault.apexindustrial.com/lab/astm-d3359-report.pdf',
+        fileSize: 1829440,
+        complianceActionId: 'act-001',
+        facilityId: 'fac-001',
+        productId: 'prod-001',
+        createdAt: new Date('2024-04-15T00:00:00Z').toISOString(),
+      },
+      {
+        id: 'doc-003',
+        organizationId: 'org-apex-001',
+        title: 'Belgian Customs Authorized CBAM Declarant Certificate BE-CBAM-2025-8841.pdf',
+        fileType: 'application/pdf',
+        fileUrl: 'https://vault.apexindustrial.com/legal/cbam-auth-be-8841.pdf',
+        fileSize: 842100,
+        complianceActionId: 'act-005',
+        facilityId: 'fac-003',
+        createdAt: new Date('2024-02-28T00:00:00Z').toISOString(),
+      },
+      {
+        id: 'doc-004',
+        organizationId: 'org-apex-001',
+        title: 'PowerCell X9 Battery CIRPASS QR Code Layout & Cryptographic Schema.pdf',
+        fileType: 'application/pdf',
+        fileUrl: 'https://vault.apexindustrial.com/engineering/pcx9-qr-layout.pdf',
+        fileSize: 3120400,
+        complianceActionId: 'act-002',
+        productId: 'prod-003',
+        facilityId: 'fac-004',
+        createdAt: new Date('2024-05-10T00:00:00Z').toISOString(),
+      }
+    ];
+
+    // Audit Logs
+    this.auditLogs = [
+      {
+        id: 'aud-001',
+        organizationId: 'org-apex-001',
+        userId: 'usr-apex-002',
+        action: 'SYSTEM_INITIALIZATION',
+        entityType: 'Organization',
+        entityId: 'org-apex-001',
+        metadata: { client: 'Apex Industrial Systems Corp.', modules: 17, version: '1.0.0-PROD' },
+        ipAddress: '192.168.1.10',
+        createdAt: new Date('2024-01-01T08:00:00Z').toISOString(),
+      },
+      {
+        id: 'aud-002',
+        organizationId: 'org-apex-001',
+        userId: 'usr-apex-005',
+        action: 'REGULATION_VERSION_DETECTED',
+        entityType: 'RegulationVersion',
+        entityId: 'reg-002',
+        metadata: { version: 4, hash: 'sha256-v2-reg-002-1f2e3d4c5b', previousHash: 'sha256-v1-reg-002-9a8b7c6d5e' },
+        ipAddress: '192.168.1.15',
+        createdAt: new Date('2024-02-08T10:15:00Z').toISOString(),
+      },
+      {
+        id: 'aud-003',
+        organizationId: 'org-apex-001',
+        userId: 'usr-apex-005',
+        action: 'DETERMINISTIC_DIFF_CALCULATED',
+        entityType: 'RegulatoryChange',
+        entityId: 'chg-001',
+        metadata: { additions: 3, deletions: 2, thresholdShift: '25 ppb -> 1.0 ppb', severity: 'CRITICAL' },
+        ipAddress: '192.168.1.15',
+        createdAt: new Date('2024-02-08T10:15:30Z').toISOString(),
+      },
+      {
+        id: 'aud-004',
+        organizationId: 'org-apex-001',
+        userId: 'usr-apex-002',
+        action: 'AI_SYNTHESIS_GROUNDED',
+        entityType: 'AIAnalysis',
+        entityId: 'aia-chg-001',
+        metadata: { model: 'gemini-2.5-flash', confidence: 0.98, affectedFacilities: ['fac-001'], affectedProducts: ['prod-001'] },
+        ipAddress: '192.168.1.12',
+        createdAt: new Date('2024-02-08T10:16:00Z').toISOString(),
+      },
+      {
+        id: 'aud-005',
+        organizationId: 'org-apex-001',
+        userId: 'usr-apex-003',
+        action: 'COMPLIANCE_ACTION_CREATED',
+        entityType: 'ComplianceAction',
+        entityId: 'act-001',
+        metadata: { title: 'Replace PFAS Surfactant in Apex-Fluor 400', priority: 'CRITICAL', assignee: 'usr-apex-003' },
+        ipAddress: '192.168.1.14',
+        createdAt: new Date('2024-02-09T14:30:00Z').toISOString(),
+      },
+      {
+        id: 'aud-006',
+        organizationId: 'org-apex-001',
+        userId: 'usr-apex-004',
+        action: 'HUMAN_REVIEW_MODIFIED',
+        entityType: 'RegulatoryChange',
+        entityId: 'chg-002',
+        metadata: { reviewer: 'David Richter (Senior Legal Reviewer)', status: 'APPROVED', notes: 'Confirmed legal applicability to bio-resin film.' },
+        ipAddress: '192.168.1.18',
+        createdAt: new Date('2024-04-26T09:45:00Z').toISOString(),
+      }
+    ];
+  }
+
+  // Dashboard Aggregates
+  getDashboardMetrics(orgId: string) {
+    const totalRegs = this.regulations.length;
+    const totalChanges = this.changes.length;
+    const criticalRisks = this.changes.filter(c => c.severity === 'CRITICAL').length;
+    const highRisks = this.changes.filter(c => c.severity === 'HIGH').length;
+    const openActions = this.actions.filter(a => a.status === 'OPEN' || a.status === 'IN_PROGRESS').length;
+    const completedActions = this.actions.filter(a => a.status === 'COMPLETED').length;
+    const activeFacilities = this.facilities.length;
+    const monitoredProducts = this.products.length;
+    const activeSuppliers = this.suppliers.length;
+
+    return {
+      organizationName: this.organization.name,
+      totalRegulationsTracked: totalRegs,
+      totalDriftEvents: totalChanges,
+      riskDistribution: {
+        critical: criticalRisks,
+        high: highRisks,
+        medium: this.changes.filter(c => c.severity === 'MEDIUM').length,
+        low: this.changes.filter(c => c.severity === 'LOW').length,
+        informational: this.changes.filter(c => c.severity === 'INFORMATIONAL').length,
+      },
+      compliancePostureScore: 84.5,
+      complianceActions: {
+        total: this.actions.length,
+        open: openActions,
+        completed: completedActions,
+        overdue: 0,
+      },
+      assetsCovered: {
+        facilities: activeFacilities,
+        products: monitoredProducts,
+        suppliers: activeSuppliers,
+        processes: this.processes.length,
+      },
+      recentDriftEvents: this.changes.slice(0, 5),
+      urgentActions: this.actions.filter(a => a.priority === 'CRITICAL' || a.priority === 'HIGH'),
+      unreadAlertsCount: this.alerts.filter(a => !a.read).length,
+    };
+  }
+
+  // Helper for Assistant Grounded Query
+  queryDatabaseForAssistant(query: string, orgId: string): string {
+    return JSON.stringify({
+      facilities: this.facilities.map(f => ({ id: f.id, name: f.name, country: f.country, type: f.facilityType })),
+      criticalRegulations: this.regulations.slice(0, 8).map(r => ({ id: r.id, title: r.title, category: r.category, penalties: r.penalties })),
+      urgentChanges: this.changes.slice(0, 5).map(c => ({ id: c.id, summary: c.summary, severity: c.severity, effectiveDate: c.effectiveDate })),
+      activeActions: this.actions.map(a => ({ id: a.id, title: a.title, status: a.status, priority: a.priority, dueDate: a.dueDate })),
+    }, null, 2);
+  }
+}
+
+export const store = new InMemoryStore();

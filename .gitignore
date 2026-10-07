@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.production
+.env.staging
+.env.test
+*.env.local
+
+# Production build outputs
+dist/
+build/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor and OS files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary / Cache files
+.temp/
+.cache/
+.eslintcache
+*.tsbuildinfo
+.prisma/client
+
+# SQLite fallback databases if created locally
+*.sqlite
+*.sqlite-journal
+*.db
+*.db-journal
