@@ -206,6 +206,51 @@ npm run dev
 
 ---
 
+## 🌐 Production Deployment Guide (Render + Vercel)
+
+The repository includes pre-configured deployment blueprints for both **Render** (Backend API) and **Vercel** (Frontend SPA).
+
+### Part 1: Deploy Backend to Render
+
+1. Log in to your [Render Dashboard](https://dashboard.render.com/).
+2. Click **New +** → **Blueprint** (or **Web Service**).
+3. Connect your GitHub repository: `https://github.com/msubhammsubham31-gif/AI-POLICY-TRACKER`.
+4. Render will automatically detect [`render.yaml`](file:///c:/ai%20policy%20tracker/render.yaml) with these pre-configured settings:
+   - **Environment:** `Node`
+   - **Build Command:** `npm install && npm run build:server`
+   - **Start Command:** `npm run start` (executes `node server/dist/index.js`)
+   - **Health Check Path:** `/health`
+5. Under **Environment Variables**, provide your secret values:
+   - `GEMINI_API_KEY`: Your Google Gemini API Key
+   - `SUPABASE_URL`: `https://xniukiwokjkafyxymcpc.supabase.co`
+   - `SUPABASE_ANON_KEY`: Your Supabase Anon Key
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase Service Role Key
+   - `JWT_SECRET`: (Render auto-generates a secure 32+ character key)
+6. Click **Apply** / **Create Web Service**.
+7. Once deployed, Render will provide your public backend URL, e.g.:
+   `https://regulamap-backend.onrender.com`
+
+---
+
+### Part 2: Deploy Frontend to Vercel
+
+1. Log in to your [Vercel Dashboard](https://vercel.com/dashboard).
+2. Click **Add New...** → **Project**.
+3. Import your GitHub repository: `https://github.com/msubhammsubham31-gif/AI-POLICY-TRACKER`.
+4. Configure the project settings:
+   - **Framework Preset:** `Vite`
+   - **Root Directory:** `./` (or `client`)
+   - The included [`vercel.json`](file:///c:/ai%20policy%20tracker/vercel.json) handles automatic SPA routing so deep links like `/app/dashboard` and `/app/regulations` never return 404 errors.
+5. Under **Environment Variables**, add:
+   - `VITE_API_URL`: `https://your-backend-name.onrender.com/api` (the Render URL from Part 1)
+   - `VITE_SUPABASE_URL`: `https://xniukiwokjkafyxymcpc.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY`: Your Supabase Anon Key
+6. Click **Deploy**.
+7. Vercel will build and assign a global, high-performance domain:
+   `https://ai-policy-tracker.vercel.app`
+
+---
+
 ## 🔒 Security & Data Isolation
 - **Strict Tenant Scoping:** Every query automatically filters by `organization_id` derived directly from verified JWT payloads.
 - **Header Hardening:** Helmet middleware configured with CSP policies supporting MapLibre GL tiles.
