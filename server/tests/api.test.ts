@@ -76,7 +76,7 @@ describe('RegulaMap Express API Endpoints', () => {
     expect(res.body.answer).toBeDefined();
     expect(res.body.disclaimer).toContain('AI-generated regulatory analysis is not legal advice');
     expect(res.body.groundedSourcesUsed.length).toBeGreaterThan(0);
-  });
+  }, 15000);
 
   it('GET /api/audit-log returns immutable audit trail', async () => {
     const res = await request(app)

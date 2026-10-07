@@ -17,7 +17,9 @@ import {
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export function getAuthToken(): string | null {
-  return localStorage.getItem('regulamap_token');
+  const token = localStorage.getItem('regulamap_token');
+  if (!token || token === 'null' || token === 'undefined' || token.trim() === '') return null;
+  return token;
 }
 
 export function setAuthToken(token: string) {
@@ -47,6 +49,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      removeAuthToken();
+    }
     let errMsg = `Request failed: ${response.status} ${response.statusText}`;
     try {
       const errJson = await response.json();

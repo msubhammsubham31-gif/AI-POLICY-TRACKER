@@ -7,7 +7,7 @@ if (!config.geminiApiKey) {
 }
 
 export const ai = new GoogleGenAI({ apiKey: config.geminiApiKey || '' });
-export const GEMINI_MODEL = 'gemini-2.5-flash';
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 export const SYSTEM_PROMPT = `You are RegulaMap-AI, a world-class regulatory compliance intelligence architect and legal research expert.
 Your directive is to analyze legal text changes between regulatory versions and evaluate operational exposure for enterprise company assets.
@@ -36,22 +36,28 @@ export interface AnalysisInput {
   };
 }
 
-export async function analyzeRegulatoryDrift(input: AnalysisInput) {
-  const prompt = `Analyze the regulatory drift between previous and new legal text versions for:
-Regulation: "${input.regulationTitle}" (Category: ${input.category})
-Proposed / Enacted Effective Date: ${input.effectiveDate || 'Immediate'}
+function withTimeout<T>(promise: Promise<T>, ms = 4000): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Gemini request timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
+export async function generateStructuredAnalysis(input: AnalysisInput) {
+  const prompt = `REGULATORY CHANGE INPUT:
+Title: ${input.regulationTitle}
+Category: ${input.category}
+Effective Date: ${input.effectiveDate || 'Not specified'}
 
 PREVIOUS VERSION TEXT:
 ${input.oldText}
 
-NEW VERSION TEXT:
+REVISED VERSION TEXT:
 ${input.newText}
 
-COMPANY ASSET CONTEXT (APEX INDUSTRIAL SYSTEMS):
-- Operating Facilities: Dresden (Germany - Chemical & Polymers), Austin (USA - BioPlastics & Packaging), Antwerp (Belgium - Refineries & Solvents), Osaka (Japan - Battery Assembly)
-- Products: Apex-Fluor 400 Coating, EcoPack Food Film, PowerCell X9 Battery, SynthoFlex Elastomer, BioSolv Degreaser, CryoSeal Gasket
-- Industrial Processes: Fluoropolymer Curing, Bio-Resin Extrusion, RTO Abatement, Solvent Distillation, Laser Tab Welding, Battery Slurry Mixing
-- Key Suppliers: Tokyo ChemCorp, BASF SE, Nordic Bio-Polymers, Rio Tinto Battery Materials, DuPont Fluoromaterials, Umicore
+COMPANY ASSET CONTEXT:
+${input.companyContext ? JSON.stringify(input.companyContext, null, 2) : 'General heavy industrial manufacturing and chemical synthesis.'}
 
 Evaluate what changed, why it matters to operations, map exposed assets, potential obligations, and prioritized recommended actions.
 Return ONLY valid JSON matching the analysis schema.`;
@@ -61,15 +67,18 @@ Return ONLY valid JSON matching the analysis schema.`;
       return getDeterministicFallbackAnalysis(input);
     }
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [
-        { role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\n${prompt}` }] }
-      ],
-      config: {
-        responseMimeType: 'application/json',
-      }
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [
+          { role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\n${prompt}` }] }
+        ],
+        config: {
+          responseMimeType: 'application/json',
+        }
+      }),
+      4000
+    );
 
     const responseText = response.text?.trim() || '{}';
     const parsed = JSON.parse(responseText);
@@ -80,6 +89,8 @@ Return ONLY valid JSON matching the analysis schema.`;
     return getDeterministicFallbackAnalysis(input);
   }
 }
+
+export const analyzeRegulatoryDrift = generateStructuredAnalysis;
 
 export async function answerAssistantQuery(
   query: string,
@@ -108,12 +119,15 @@ Provide a structured, executive-level compliance advisory response with direct c
       return getDeterministicAssistantAnswer(query, groundedContext);
     }
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [
-        { role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\n${prompt}` }] }
-      ],
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [
+          { role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\n${prompt}` }] }
+        ],
+      }),
+      4000
+    );
 
     return response.text || getDeterministicAssistantAnswer(query, groundedContext);
   } catch (err: any) {

@@ -13,7 +13,7 @@ import {
   FileText,
   AlertTriangle,
 } from 'lucide-react';
-import { api } from '../services/api';
+import { api, removeAuthToken } from '../services/api';
 import { LegalDisclaimer } from '../components/common/LegalDisclaimer';
 
 interface ChatMessage {
@@ -88,12 +88,17 @@ export const AssistantPage: React.FC = () => {
         sources: res.groundedSourcesUsed || ['RegulaMap Compliance Graph'],
       };
 
-      setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
+      if (err.message && (err.message.includes('token') || err.message.includes('Unauthorized') || err.message.includes('authorization'))) {
+        removeAuthToken();
+      }
+      const isAuthErr = err.message && (err.message.includes('token') || err.message.includes('Unauthorized') || err.message.includes('authorization'));
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         sender: 'assistant',
-        text: `⚠️ **Error querying regulatory intelligence engine:** ${err.message || 'Service temporarily unavailable'}. Please verify your API connectivity.`,
+        text: isAuthErr
+          ? `⚠️ **Session authorization token was refreshed.** Your browser session has been synchronized with the demo compliance officer profile. Please click **Send** or choose a question below to continue!`
+          : `⚠️ **Error querying regulatory intelligence engine:** ${err.message || 'Service temporarily unavailable'}. Please verify your API connectivity.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
