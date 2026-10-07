@@ -12,12 +12,6 @@ node_modules/
 
 # Production build outputs
 client/dist/
-server/dist/
-dist/*
-!dist/index.js
-client/server/dist/*
-!client/server/dist/index.js
-!client/server/dist/package.json
 build/
 out/
 
