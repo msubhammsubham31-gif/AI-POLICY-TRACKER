@@ -14,7 +14,21 @@ import {
   User,
 } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const CLOUD_API_BASE = 'https://ai-policy-tracker-ifp4.onrender.com/api';
+
+function getApiBase(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (!isLocalhost) {
+      if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+        return envUrl;
+      }
+      return CLOUD_API_BASE;
+    }
+  }
+  return envUrl || 'http://localhost:5000/api';
+}
 
 export function getAuthToken(): string | null {
   const token = localStorage.getItem('regulamap_token');
@@ -43,24 +57,43 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['x-demo-user'] = 'true';
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const base = getApiBase();
+  const url = `${base}${endpoint}`;
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      removeAuthToken();
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        removeAuthToken();
+      }
+      let errMsg = `Request failed: ${response.status} ${response.statusText}`;
+      try {
+        const errJson = await response.json();
+        errMsg = errJson.error || errMsg;
+      } catch (_) {}
+      throw new Error(errMsg);
     }
-    let errMsg = `Request failed: ${response.status} ${response.statusText}`;
-    try {
-      const errJson = await response.json();
-      errMsg = errJson.error || errMsg;
-    } catch (_) {}
-    throw new Error(errMsg);
-  }
 
-  return response.json();
+    return await response.json();
+  } catch (err: any) {
+    // If not on localhost and primary request failed, attempt direct fallback to cloud backend
+    if (base !== CLOUD_API_BASE && typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+      try {
+        const fbResponse = await fetch(`${CLOUD_API_BASE}${endpoint}`, {
+          ...options,
+          headers,
+        });
+        if (fbResponse.ok) {
+          return await fbResponse.json();
+        }
+      } catch (_) {}
+    }
+    throw err;
+  }
 }
 
 export const api = {
